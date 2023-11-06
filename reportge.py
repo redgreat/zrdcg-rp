@@ -6,6 +6,23 @@
 from datetime import datetime, timedelta
 from random import randint
 import json
+import mysql.connector
+import configparser
+
+# 数据库连接定义
+config = configparser.ConfigParser()
+config.read("db.cnf")
+
+my_host = config.get("dcg_task_test", "host")
+my_database = config.get("dcg_task_test", "database")
+my_user = config.get("dcg_task_test", "user")
+my_password = config.get("dcg_task_test", "password")
+
+con = mysql.connector.connect(
+    host=my_host, user=my_user, password=my_password, database=my_database
+)
+
+cur = con.cursor(dictionary=True)
 
 # 常量值定义
 time_now = datetime.now()
@@ -44,18 +61,24 @@ rp_densenssec = 10  # 安全风险，应脱敏或加密数量
 
 # 任务信息获取
 # 实例信息
-str_2_1 = {
-    "key1": "消息中心",
-    "key2": "rm-bp175bls4muud11z6.mysql.rds.aliyuncs.com:3306",
-    "key3": "未分组",
-    "key4": "未分组",
-    "key5": "未分组",
-    "key6": "",
-    "key7": "",
-    "key8": "",
-    "key9": "",
-    "key_list": None
-}
+sql_2_1 = ("SELECT JSON_ARRAYAGG(JSON_OBJECT('key1', S.AssetName, 'key2', S.DBAddress, 'key3', '未分组', "
+           "'key4', '未分组', 'key5', '未分组', 'key6', NULL, "
+           "'key7', NULL, 'key8', NULL, 'key9', NULL, 'key_list', NULL)) AS data "
+           "FROM (SELECT DISTINCT A.AssetName,B.DBAddress "
+           "FROM tb_template_imports A "
+           "LEFT JOIN zr_dcg_asset.tb_asset_instance B "
+           "ON B.AssetId=A.AssetId "
+           "AND B.Deleted=0 WHERE A.AssetId='AI9999999938') AS S;"
+           )
+
+try:
+    str_2_1 = []
+    cur.execute(sql_2_1)
+    res_2_1 = cur.fetchall()
+    if res_2_1:
+        str_2_1 = res_2_1[0].get('data')
+except Exception as e:
+    print(e)
 
 # 各分组
 str_group = [
@@ -114,99 +137,179 @@ str_2_5 = [
 ]
 
 # 资产库表 统计
-str_2_6 = [
-    {
-        "key1": "消息中心",
-        "key2": "MySQL",
-        "key3": "1",
-        "key4": "{0}",
-        "key5": "{1}",
-        "key6": "{2}",
-        "key7": "{3}",
-        "key8": "",
-        "key9": "",
-        "key_list": None
-    },
-    {
-        "key1": "1",
-        "key2": "",
-        "key3": "1",
-        "key4": "{0}",
-        "key5": "{1}",
-        "key6": "{2}",
-        "key7": "{3}",
-        "key8": "",
-        "key9": "",
-        "key_list": None
-    }
-]
-str_2_6_table = 1
-str_2_6_column = 1
-str_2_6_class = 'D'
+sql_2_6 = ("SELECT JSON_ARRAYAGG(JSON_OBJECT('key1', S.AssetName, 'key2', S.InstanceType, 'key3', S.DBCnt, "
+           "'key4', S.SensRate, 'key5', S.SensTotal, 'key6', S.DataGrade,  "
+           "'key7', NULL, 'key8', NULL, 'key9', NULL, 'key_list', NULL)) AS data "
+           "FROM (SELECT A.AssetName,B.InstanceType,COUNT(DISTINCT SUBSTRING_INDEX(DataColumns, '.', 1)) AS DBCnt, "
+           "CONCAT(COS.SensCnt,'/',COS.TBCnt,'--',ROUND(((COS.SensCnt / COS.TBCnt) * 100), 2),'%') AS SensRate, "
+           "CO.SensTotal,CONCAT(MIN(IF(A.DataGrade NOT IN ('A','B','C','D'),'D',A.DataGrade)),'级') AS DataGrade "
+           "FROM tb_template_imports A "
+           "LEFT JOIN zr_dcg_asset.tb_asset_instance B "
+           "ON B.AssetId=A.AssetId "
+           "AND B.Deleted=0 "
+           "LEFT JOIN zr_dcg_asset.tb_asset_database C "
+           "ON C.AssetInsId=B.Id "
+           "AND C.DBName COLLATE utf8mb4_general_ci= "
+           "SUBSTRING_INDEX(DataColumns, '.', 1) COLLATE utf8mb4_general_ci "
+           "AND C.Deleted=0 "
+           "LEFT JOIN (SELECT SUBSTRING_INDEX(DataColumns, '.', 1) AS DBName, COUNT(*) SensTotal "
+           "FROM tb_template_imports WHERE AssetId='AI9999999938' "
+           "AND IsSens = '是' "
+           "GROUP BY SUBSTRING_INDEX(DataColumns, '.', 1)) CO "
+           "ON CO.DBName=SUBSTRING_INDEX(A.DataColumns, '.', 1) "
+           "LEFT JOIN (SELECT SUBSTRING_INDEX(DataColumns, '.', 1) AS DBName, "
+           "COUNT(DISTINCT SUBSTRING_INDEX(SUBSTRING_INDEX(DataColumns, '.', 2), '.', -1)) AS TBCnt, "
+           "COUNT(DISTINCT (IF(IsSens='是',SUBSTRING_INDEX(SUBSTRING_INDEX(DataColumns, '.', 2), '.', -1),NULL))) "
+           "AS SensCnt FROM tb_template_imports WHERE AssetId='AI9999999938' "
+           "GROUP BY SUBSTRING_INDEX(DataColumns, '.', 1)) AS COS "
+           "ON COS.DBName=SUBSTRING_INDEX(A.DataColumns, '.', 1) "
+           "WHERE A.AssetId='AI9999999938' GROUP BY SUBSTRING_INDEX(A.DataColumns, '.', 1)) AS S;"
+           )
+
+sql_all_2_6 = ("SELECT JSON_ARRAYAGG(JSON_OBJECT('key1', S.AssetCnt, 'key2', NULL, 'key3', S.DBCnt, "
+               "'key4', S.SensRate, 'key5', S.SensTotal, 'key6', NULL, "
+               "'key7', NULL, 'key8', NULL, 'key9', NULL, 'key_list', NULL)) AS data "
+               "FROM (SELECT COUNT(DISTINCT A.AssetId) AS AssetCnt, "
+               "COUNT(DISTINCT SUBSTRING_INDEX(DataColumns, '.', 1)) AS DBCnt, "
+               "(SELECT CONCAT(COS.SensCnt,'/',COS.TBCnt,'--',ROUND(((COS.SensCnt / COS.TBCnt) * 100), 2),'%') "
+               "FROM (SELECT COUNT(DISTINCT SUBSTRING_INDEX(SUBSTRING_INDEX(DataColumns, '.', 2), '.', -1)) AS TBCnt, "
+               "COUNT(DISTINCT (IF(IsSens='是',SUBSTRING_INDEX(SUBSTRING_INDEX(DataColumns, '.', 2), '.', -1),NULL))) "
+               "AS SensCnt FROM tb_template_imports WHERE AssetId='AI9999999938') AS COS) AS SensRate, "
+               "(SELECT COUNT(*) SensTotal "
+               "FROM tb_template_imports WHERE AssetId='AI9999999938' "
+               "AND IsSens = '是') AS SensTotal "
+               "FROM tb_template_imports A "
+               "LEFT JOIN zr_dcg_asset.tb_asset_instance B "
+               "ON B.AssetId=A.AssetId "
+               "AND B.Deleted=0 "
+               "LEFT JOIN zr_dcg_asset.tb_asset_database C "
+               "ON C.AssetInsId=B.Id "
+               "AND C.DBName COLLATE utf8mb4_general_ci= "
+               "SUBSTRING_INDEX(DataColumns, '.', 1) COLLATE utf8mb4_general_ci "
+               "AND C.Deleted=0 WHERE A.AssetId='AI9999999938') AS S"
+               )
+
+try:
+    str_2_6 = []
+    str_all_2_6 = []
+    cur.execute(sql_2_6)
+    res_2_6 = cur.fetchall()
+    if res_2_6:
+        str_2_6 = json.loads(res_2_6[0]['data'])
+    cur.execute(sql_all_2_6)
+    res_all_2_6 = cur.fetchall()
+    if res_all_2_6:
+        str_all_2_6 = json.loads(res_all_2_6[0]['data'])
+    str_2_6.append(str_all_2_6[0])
+except Exception as e:
+    print(e)
+
+# 数据类型标签统计
+sql_2_7 = ("SELECT JSON_ARRAYAGG(JSON_OBJECT('key1', S.DataTypeName, 'key2', S.ClassName, "
+           "'key3', S.DataGrade, 'key4', S.IsSens, 'key5', NULL, 'key6', S.DataTypeCnt,'key7', "
+           "S.TotalRate, 'key8', NULL, 'key9', NULL, 'key_list', NULL)) AS data "
+           "FROM (SELECT DataTypeName,MAX(Class4) AS ClassName,MIN(DataGrade) AS DataGrade, "
+           "CASE IsSens WHEN '是' THEN '敏感' WHEN '否' THEN '非敏感' ELSE '非敏感' END AS IsSens, "
+           "COUNT(*) AS DataTypeCnt,CONCAT(ROUND((( COUNT(*) / (SELECT COUNT(DISTINCT DataTypeName) "
+           "FROM tb_template_imports "
+           "WHERE AssetId='AI9999999938') ) * 100),2),'%') AS TotalRate "
+           "FROM tb_template_imports "
+           "WHERE AssetId='AI9999999938' "
+           "GROUP BY DataTypeName) AS S;"
+           )
+
+sql_all_2_7 = ("SELECT JSON_ARRAYAGG(JSON_OBJECT('key1', S.DataTypeCnt, 'key2', NULL, 'key3', NULL, "
+               "'key4', NULL, 'key5', NULL, 'key6', S.TotalCnt, "
+               "'key7', '100%', 'key8', NULL, 'key9', NULL, 'key_list', NULL)) AS data "
+               "FROM (SELECT COUNT(DISTINCT DataTypeName) AS DataTypeCnt, COUNT(*) AS TotalCnt "
+               "FROM tb_template_imports WHERE AssetId='AI9999999938') AS S;"
+               )
+
+try:
+    str_2_7 = []
+    str_all_2_7 = []
+    cur.execute(sql_2_7)
+    res_2_7 = cur.fetchall()
+    if res_2_7:
+        str_2_7 = json.loads(res_2_7[0]['data'])
+    cur.execute(sql_all_2_7)
+    res_all_2_7 = cur.fetchall()
+    if res_all_2_7:
+        str_all_2_7 = json.loads(res_all_2_7[0]['data'])
+    str_2_7.append(str_all_2_7[0])
+except Exception as e:
+    print(e)
+
+# 2_8 分类分级标签统计
+sql_2_8 = ("SELECT JSON_ARRAYAGG(JSON_OBJECT('key1', S.Class4, 'key2', S.DataGrade, "
+           "'key3', S.IsSens, 'key4', S.TagCnt, 'key5', TotalRate, 'key6', NULL, "
+           "'key7', NULL, 'key8', NULL, 'key9', NULL, 'key_list', NULL)) AS data "
+           "FROM (SELECT Class4,MIN(IF(DataGrade NOT IN ('A','B','C','D'),'D',DataGrade)) AS DataGrade, "
+           "CASE IsSens WHEN '是' THEN '敏感' WHEN '否' THEN '非敏感' ELSE '非敏感' END AS IsSens, "
+           "COUNT(*) AS TagCnt,CONCAT(ROUND((( COUNT(*) / (SELECT COUNT(DISTINCT Class4) "
+           "FROM tb_template_imports "
+           "WHERE AssetId='AI9999999938') ) * 100),2),'%') AS TotalRate "
+           "FROM tb_template_imports "
+           "WHERE AssetId='AI9999999938' "
+           "GROUP BY Class4) AS S;"
+           )
+
+sql_all_2_8 = ("SELECT JSON_ARRAYAGG(JSON_OBJECT('key1', S.Class4Cnt, 'key2', NULL, 'key3', NULL, "
+               "'key4', NULL, 'key5', NULL, 'key6', S.TotalCnt, "
+               "'key7', '100%', 'key8', NULL, 'key9', NULL, 'key_list', NULL)) AS data "
+               "FROM (SELECT COUNT(DISTINCT Class4) AS Class4Cnt, COUNT(*) AS TotalCnt "
+               "FROM tb_template_imports WHERE AssetId='AI9999999938') AS S;"
+               )
+
+try:
+    str_2_8 = []
+    str_all_2_8 = []
+    cur.execute(sql_2_8)
+    res_2_8 = cur.fetchall()
+    if res_2_8:
+        str_2_8 = json.loads(res_2_8[0]['data'])
+    cur.execute(sql_all_2_8)
+    res_all_2_8 = cur.fetchall()
+    if res_all_2_8:
+        str_all_2_8 = json.loads(res_all_2_8[0]['data'])
+    str_2_8.append(str_all_2_8[0])
+except Exception as e:
+    print(e)
 
 # 分级标签
-str_2_9 = [
-    {
-      "key1": "A级",
-      "key2": "敏感",
-      "key3": "1",
-      "key4": "0.53%",
-      "key5": "",
-      "key6": "",
-      "key7": "",
-      "key8": "",
-      "key9": "",
-      "key_list": None
-    },
-    {
-      "key1": "B级",
-      "key2": "非敏感",
-      "key3": "1",
-      "key4": "0.53%",
-      "key5": "",
-      "key6": "",
-      "key7": "",
-      "key8": "",
-      "key9": "",
-      "key_list": None
-    },
-    {
-      "key1": "C级",
-      "key2": "非敏感",
-      "key3": "1",
-      "key4": "0.53%",
-      "key5": "",
-      "key6": "",
-      "key7": "",
-      "key8": "",
-      "key9": "",
-      "key_list": None
-    },
-    {
-      "key1": "D级",
-      "key2": "非敏感",
-      "key3": "185",
-      "key4": "98.93%",
-      "key5": "",
-      "key6": "",
-      "key7": "",
-      "key8": "",
-      "key9": "",
-      "key_list": None
-    },
-    {
-      "key1": "3",
-      "key2": "",
-      "key3": "187",
-      "key4": "100%",
-      "key5": "",
-      "key6": "",
-      "key7": "",
-      "key8": "",
-      "key9": "",
-      "key_list": None
-    }
-  ]
+sql_2_9 = ("SELECT JSON_ARRAYAGG(JSON_OBJECT('key1', S.DataGrade, 'key2', S.IsSens, "
+           "'key3', S.GradeCnt, 'key4', S.TotalRate, 'key5', NULL, 'key6', NULL, "
+           "'key7', NULL, 'key8', NULL, 'key9', NULL, 'key_list', NULL)) AS data "
+           "FROM (SELECT DataGrade,CASE IsSens WHEN '是' THEN '敏感' WHEN '否' THEN '非敏感' ELSE '非敏感' END AS IsSens, "
+           "COUNT(*) AS GradeCnt,CONCAT(ROUND((( COUNT(*) / (SELECT COUNT(*) "
+           "FROM tb_template_imports "
+           "WHERE AssetId='AI9999999938') ) * 100),2),'%') AS TotalRate "
+           "FROM tb_template_imports "
+           "WHERE AssetId='AI9999999938' "
+           "GROUP BY DataGrade) AS S; "
+           )
+
+sql_all_2_9 = ("SELECT JSON_ARRAYAGG(JSON_OBJECT('key1', S.GreadeCnt, 'key2', NULL, 'key3', TotalCnt, "
+               "'key4', '100%', 'key5', NULL, 'key6', NULL, "
+               "'key7', NULL, 'key8', NULL, 'key9', NULL, 'key_list', NULL)) AS data "
+               "FROM (SELECT COUNT(DISTINCT DataGrade) AS GreadeCnt, COUNT(*) AS TotalCnt "
+               "FROM tb_template_imports WHERE AssetId='AI9999999938') AS S;"
+               )
+
+try:
+    str_2_9 = []
+    str_all_2_9 = []
+    cur.execute(sql_2_9)
+    res_2_9 = cur.fetchall()
+    if res_2_9:
+        str_2_9 = json.loads(res_2_9[0]['data'])
+    cur.execute(sql_all_2_9)
+    res_all_2_9 = cur.fetchall()
+    if res_all_2_9:
+        str_all_2_9 = json.loads(res_all_2_9[0]['data'])
+    str_2_9.append(str_all_2_9[0])
+except Exception as e:
+    print(e)
 
 # 报告生成
 def get_rp_value():
@@ -272,8 +375,10 @@ def get_rp_value():
     rp_value["str_2_6"] = str_2_6
 
     # 2_7 数据类型标签统计
+    rp_value["2_7"] = str_2_7
 
     # 2_8 分类分级标签统计
+    rp_value["2_8"] = str_2_8
 
     # 2_9 分级标签统计
     rp_value["str_2_9"] = str_2_9
