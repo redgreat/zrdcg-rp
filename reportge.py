@@ -27,15 +27,10 @@ con = mysql.connector.connect(
     host=my_host, user=my_user, password=my_password, database=my_database
 )
 
-con_src = mysql.connector.connect(
-    host=src_host, user=src_user, password=src_password, database=src_database
-)
-
 
 # 报告生成
-def get_rp_value():
+def get_rp_value(import_stamp: str):
     cur = con.cursor(dictionary=True)
-    cur_src = con_src.cursor(dictionary=True)
 
     # 常量值定义
     time_now = datetime.now()
@@ -64,7 +59,7 @@ def get_rp_value():
                  "SUBSTRING_INDEX(SUBSTRING_INDEX(DataColumns, '.', 2), '.', -1) AS TableName, "
                  "IF(SUM(IF(IsSens='是',1,0))>0,1,0) AS TableSens, COUNT(*) AS ColumnCnt, "
                  "SUM(IF(IsSens='是',1,0)) AS ColumnSensCnt FROM tb_template_imports "
-                 "WHERE ImportStamp='6ac3bb98-7d17-11ee-a46d-0c42a163ddf4' "
+                 "WHERE ImportStamp=%s "
                  "GROUP BY SUBSTRING_INDEX(SUBSTRING_INDEX(DataColumns, '.', 2), '.', -1)) AS S;"
                  )
 
@@ -74,28 +69,28 @@ def get_rp_value():
                  "FROM (SELECT Class4 AS TagName,DataTypeName,SUM(IF(DataGrade='A',1,0)) AS TagGrade, "
                  "MIN(IF(DataGrade NOT IN ('A','B','C','D'),'D',DataGrade)) AS DataGrade "
                  "FROM tb_template_imports "
-                 "WHERE ImportStamp='6ac3bb98-7d17-11ee-a46d-0c42a163ddf4' GROUP BY DataTypeName) AS S;"
+                 "WHERE ImportStamp=%s GROUP BY DataTypeName) AS S;"
                  )
 
     try:
-        cur.execute(sql_itc_1)
+        cur.execute(sql_itc_1,[import_stamp])
         res_itc_1 = cur.fetchall()
         if res_itc_1:
-            rp_assets = res_itc_1[0][('AssenCnt')]  # 数据资产总数
-            rp_asset_sens = res_itc_1[0][('AssetSensCnt')]  # 数据资产敏感字段数量
-            rp_databases = res_itc_1[0][('AssetSensCnt')]  # 数据库/schema数量
-            rp_database_sens = res_itc_1[0][('AssetSensCnt')]  # 数据库/schema敏感数量
-            rp_tables = res_itc_1[0][('TableCnt')]  # 表数量数量
-            rp_table_sens = res_itc_1[0][('TableSensCnt')]  # 表敏感数量
-            rp_columns = res_itc_1[0][('ColumnCnt')]  # 分类分级标签数量
-            rp_column_sens = res_itc_1[0][('ColumnSensCnt')]  # 数据类型标签敏感数量
-        cur.execute(sql_tag_1)
+            rp_assets = res_itc_1[0]['AssenCnt']  # 数据资产总数
+            rp_asset_sens = res_itc_1[0]['AssetSensCnt']  # 数据资产敏感字段数量
+            rp_databases = res_itc_1[0]['AssetSensCnt']  # 数据库/schema数量
+            rp_database_sens = res_itc_1[0]['AssetSensCnt']  # 数据库/schema敏感数量
+            rp_tables = res_itc_1[0]['TableCnt']  # 表数量数量
+            rp_table_sens = res_itc_1[0]['TableSensCnt']  # 表敏感数量
+            rp_columns = res_itc_1[0]['ColumnCnt']  # 分类分级标签数量
+            rp_column_sens = res_itc_1[0]['ColumnSensCnt']  # 数据类型标签敏感数量
+        cur.execute(sql_tag_1,[import_stamp])
         res_tag_1 = cur.fetchall()
         if res_tag_1:
-            rp_type = res_tag_1[0][('TypeCnt')]  # 数据类型数量
-            rp_tag = res_tag_1[0][('TagGrade')]  # 分类分级目录数量
-            rp_class = res_tag_1[0][('TopGrade')]  # 分类分级最高分级
-            rp_rate = res_tag_1[0][('TagGradeRate')]  # 数据类型标签占比
+            rp_type = res_tag_1[0]['TypeCnt']  # 数据类型数量
+            rp_tag = res_tag_1[0]['TagCnt']  # 分类分级目录数量
+            rp_class = res_tag_1[0]['TopGrade']  # 分类分级最高分级
+            rp_rate = res_tag_1[0]['TagGradeRate']  # 数据类型标签占比
     except Exception as e:
         print(e)
 
@@ -108,15 +103,15 @@ def get_rp_value():
                "FROM tb_template_imports A "
                "LEFT JOIN zr_dcg_asset.tb_asset_instance B "
                "ON B.AssetId=A.AssetId "
-               "AND B.Deleted=0 WHERE A.ImportStamp='6ac3bb98-7d17-11ee-a46d-0c42a163ddf4') AS S;"
+               "AND B.Deleted=0 WHERE A.ImportStamp=%s) AS S;"
                )
 
     try:
         str_2_1 = []
-        cur.execute(sql_2_1)
+        cur.execute(sql_2_1,[import_stamp])
         res_2_1 = cur.fetchall()
         if res_2_1:
-            str_2_1 = json.loads(res_2_1[0][('data')])
+            str_2_1 = json.loads(res_2_1[0]['data'])
     except Exception as e:
         print(e)
 
@@ -193,17 +188,17 @@ def get_rp_value():
                "SUBSTRING_INDEX(DataColumns, '.', 1) COLLATE utf8mb4_general_ci "
                "AND C.Deleted=0 "
                "LEFT JOIN (SELECT SUBSTRING_INDEX(DataColumns, '.', 1) AS DBName, COUNT(*) SensTotal "
-               "FROM tb_template_imports WHERE ImportStamp='6ac3bb98-7d17-11ee-a46d-0c42a163ddf4' "
+               "FROM tb_template_imports WHERE ImportStamp=%s "
                "AND IsSens = '是' "
                "GROUP BY SUBSTRING_INDEX(DataColumns, '.', 1)) CO "
                "ON CO.DBName=SUBSTRING_INDEX(A.DataColumns, '.', 1) "
                "LEFT JOIN (SELECT SUBSTRING_INDEX(DataColumns, '.', 1) AS DBName, "
                "COUNT(DISTINCT SUBSTRING_INDEX(SUBSTRING_INDEX(DataColumns, '.', 2), '.', -1)) AS TBCnt, "
                "COUNT(DISTINCT (IF(IsSens='是',SUBSTRING_INDEX(SUBSTRING_INDEX(DataColumns, '.', 2), '.', -1),NULL))) "
-               "AS SensCnt FROM tb_template_imports WHERE ImportStamp='6ac3bb98-7d17-11ee-a46d-0c42a163ddf4' "
+               "AS SensCnt FROM tb_template_imports WHERE ImportStamp=%s "
                "GROUP BY SUBSTRING_INDEX(DataColumns, '.', 1)) AS COS "
                "ON COS.DBName=SUBSTRING_INDEX(A.DataColumns, '.', 1) "
-               "WHERE A.ImportStamp='6ac3bb98-7d17-11ee-a46d-0c42a163ddf4' GROUP BY SUBSTRING_INDEX(A.DataColumns, '.', 1)) AS S;"
+               "WHERE A.ImportStamp=%s GROUP BY SUBSTRING_INDEX(A.DataColumns, '.', 1)) AS S;"
                )
 
     sql_all_2_6 = ("SELECT JSON_ARRAYAGG(JSON_OBJECT('key1', S.AssetCnt, 'key2', NULL, 'key3', S.DBCnt, "
@@ -214,9 +209,9 @@ def get_rp_value():
                    "(SELECT CONCAT(COS.SensCnt,'/',COS.TBCnt,'--',ROUND(((COS.SensCnt / COS.TBCnt) * 100), 2),'%') "
                    "FROM (SELECT COUNT(DISTINCT SUBSTRING_INDEX(SUBSTRING_INDEX(DataColumns, '.', 2), '.', -1)) AS TBCnt, "
                    "COUNT(DISTINCT (IF(IsSens='是',SUBSTRING_INDEX(SUBSTRING_INDEX(DataColumns, '.', 2), '.', -1),NULL))) "
-                   "AS SensCnt FROM tb_template_imports WHERE ImportStamp='6ac3bb98-7d17-11ee-a46d-0c42a163ddf4') "
+                   "AS SensCnt FROM tb_template_imports WHERE ImportStamp=%s) "
                    "AS COS) AS SensRate, (SELECT COUNT(*) SensTotal "
-                   "FROM tb_template_imports WHERE ImportStamp='6ac3bb98-7d17-11ee-a46d-0c42a163ddf4' "
+                   "FROM tb_template_imports WHERE ImportStamp=%s "
                    "AND IsSens = '是') AS SensTotal "
                    "FROM tb_template_imports A "
                    "LEFT JOIN zr_dcg_asset.tb_asset_instance B "
@@ -226,17 +221,17 @@ def get_rp_value():
                    "ON C.AssetInsId=B.Id "
                    "AND C.DBName COLLATE utf8mb4_general_ci= "
                    "SUBSTRING_INDEX(DataColumns, '.', 1) COLLATE utf8mb4_general_ci "
-                   "AND C.Deleted=0 WHERE A.ImportStamp='6ac3bb98-7d17-11ee-a46d-0c42a163ddf4') AS S"
+                   "AND C.Deleted=0 WHERE A.ImportStamp=%s) AS S"
                    )
 
     try:
         str_2_6 = []
         str_all_2_6 = []
-        cur.execute(sql_2_6)
+        cur.execute(sql_2_6,[import_stamp, import_stamp, import_stamp])
         res_2_6 = cur.fetchall()
         if res_2_6:
             str_2_6 = json.loads(res_2_6[0]['data'])
-        cur.execute(sql_all_2_6)
+        cur.execute(sql_all_2_6,[import_stamp, import_stamp, import_stamp])
         res_all_2_6 = cur.fetchall()
         if res_all_2_6:
             str_all_2_6 = json.loads(res_all_2_6[0]['data'])
@@ -252,9 +247,9 @@ def get_rp_value():
                "CASE IsSens WHEN '是' THEN '敏感' WHEN '否' THEN '非敏感' ELSE '非敏感' END AS IsSens, "
                "COUNT(*) AS DataTypeCnt,CONCAT(ROUND((( COUNT(*) / (SELECT COUNT(DISTINCT DataTypeName) "
                "FROM tb_template_imports "
-               "WHERE ImportStamp='6ac3bb98-7d17-11ee-a46d-0c42a163ddf4') ) * 100),2),'%') AS TotalRate "
+               "WHERE ImportStamp=%s) ) * 100),2),'%') AS TotalRate "
                "FROM tb_template_imports "
-               "WHERE ImportStamp='6ac3bb98-7d17-11ee-a46d-0c42a163ddf4' "
+               "WHERE ImportStamp=%s "
                "GROUP BY DataTypeName) AS S;"
                )
 
@@ -262,17 +257,17 @@ def get_rp_value():
                    "'key4', NULL, 'key5', NULL, 'key6', S.TotalCnt, "
                    "'key7', '100%', 'key8', NULL, 'key9', NULL, 'key_list', NULL)) AS data "
                    "FROM (SELECT COUNT(DISTINCT DataTypeName) AS DataTypeCnt, COUNT(*) AS TotalCnt "
-                   "FROM tb_template_imports WHERE ImportStamp='6ac3bb98-7d17-11ee-a46d-0c42a163ddf4') AS S;"
+                   "FROM tb_template_imports WHERE ImportStamp=%s) AS S;"
                    )
 
     try:
         str_2_7 = []
         str_all_2_7 = []
-        cur.execute(sql_2_7)
+        cur.execute(sql_2_7,[import_stamp, import_stamp])
         res_2_7 = cur.fetchall()
         if res_2_7:
             str_2_7 = json.loads(res_2_7[0]['data'])
-        cur.execute(sql_all_2_7)
+        cur.execute(sql_all_2_7,[import_stamp])
         res_all_2_7 = cur.fetchall()
         if res_all_2_7:
             str_all_2_7 = json.loads(res_all_2_7[0]['data'])
@@ -288,9 +283,9 @@ def get_rp_value():
                "CASE IsSens WHEN '是' THEN '敏感' WHEN '否' THEN '非敏感' ELSE '非敏感' END AS IsSens, "
                "COUNT(*) AS TagCnt,CONCAT(ROUND((( COUNT(*) / (SELECT COUNT(DISTINCT Class4) "
                "FROM tb_template_imports "
-               "WHERE ImportStamp='6ac3bb98-7d17-11ee-a46d-0c42a163ddf4') ) * 100),2),'%') AS TotalRate "
+               "WHERE ImportStamp=%s) ) * 100),2),'%') AS TotalRate "
                "FROM tb_template_imports "
-               "WHERE ImportStamp='6ac3bb98-7d17-11ee-a46d-0c42a163ddf4' "
+               "WHERE ImportStamp=%s "
                "GROUP BY Class4) AS S;"
                )
 
@@ -298,17 +293,17 @@ def get_rp_value():
                    "'key4', NULL, 'key5', NULL, 'key6', S.TotalCnt, "
                    "'key7', '100%', 'key8', NULL, 'key9', NULL, 'key_list', NULL)) AS data "
                    "FROM (SELECT COUNT(DISTINCT Class4) AS Class4Cnt, COUNT(*) AS TotalCnt "
-                   "FROM tb_template_imports WHERE ImportStamp='6ac3bb98-7d17-11ee-a46d-0c42a163ddf4') AS S;"
+                   "FROM tb_template_imports WHERE ImportStamp=%s) AS S;"
                    )
 
     try:
         str_2_8 = []
         str_all_2_8 = []
-        cur.execute(sql_2_8)
+        cur.execute(sql_2_8,[import_stamp, import_stamp])
         res_2_8 = cur.fetchall()
         if res_2_8:
             str_2_8 = json.loads(res_2_8[0]['data'])
-        cur.execute(sql_all_2_8)
+        cur.execute(sql_all_2_8,[import_stamp])
         res_all_2_8 = cur.fetchall()
         if res_all_2_8:
             str_all_2_8 = json.loads(res_all_2_8[0]['data'])
@@ -323,9 +318,9 @@ def get_rp_value():
                "FROM (SELECT DataGrade,CASE IsSens WHEN '是' THEN '敏感' WHEN '否' THEN '非敏感' ELSE '非敏感' END AS IsSens, "
                "COUNT(*) AS GradeCnt,CONCAT(ROUND((( COUNT(*) / (SELECT COUNT(*) "
                "FROM tb_template_imports "
-               "WHERE ImportStamp='6ac3bb98-7d17-11ee-a46d-0c42a163ddf4') ) * 100),2),'%') AS TotalRate "
+               "WHERE ImportStamp=%s) ) * 100),2),'%') AS TotalRate "
                "FROM tb_template_imports "
-               "WHERE ImportStamp='6ac3bb98-7d17-11ee-a46d-0c42a163ddf4' "
+               "WHERE ImportStamp=%s "
                "GROUP BY DataGrade) AS S; "
                )
 
@@ -333,17 +328,17 @@ def get_rp_value():
                    "'key4', '100%', 'key5', NULL, 'key6', NULL, "
                    "'key7', NULL, 'key8', NULL, 'key9', NULL, 'key_list', NULL)) AS data "
                    "FROM (SELECT COUNT(DISTINCT DataGrade) AS GreadeCnt, COUNT(*) AS TotalCnt "
-                   "FROM tb_template_imports WHERE ImportStamp='6ac3bb98-7d17-11ee-a46d-0c42a163ddf4') AS S;"
+                   "FROM tb_template_imports WHERE ImportStamp=%s) AS S;"
                    )
 
     try:
         str_2_9 = []
         str_all_2_9 = []
-        cur.execute(sql_2_9)
+        cur.execute(sql_2_9,[import_stamp, import_stamp])
         res_2_9 = cur.fetchall()
         if res_2_9:
             str_2_9 = json.loads(res_2_9[0]['data'])
-        cur.execute(sql_all_2_9)
+        cur.execute(sql_all_2_9,[import_stamp])
         res_all_2_9 = cur.fetchall()
         if res_all_2_9:
             str_all_2_9 = json.loads(res_all_2_9[0]['data'])
@@ -381,13 +376,13 @@ def get_rp_value():
              "SUBSTRING_INDEX(SUBSTRING_INDEX(DataColumns, '.', 3), '.', -1))) AS TagPath, "
              "CONCAT('等 ',COUNT(*),' 个字段') AS TagPathCnt "
              "FROM tb_template_imports "
-             "WHERE ImportStamp='6ac3bb98-7d17-11ee-a46d-0c42a163ddf4' "
+             "WHERE ImportStamp=%s "
              "GROUP BY DataTypeName) AS S;"
              )
 
     try:
         str_3 = []
-        cur.execute(sql_3)
+        cur.execute(sql_3,[import_stamp])
         res_3 = cur.fetchall()
         if res_3:
             str_3 = json.loads(res_3[0]['data'])
@@ -406,11 +401,11 @@ def get_rp_value():
                "'key7', '', 'key8', '', 'key9', '', 'key_list', NULL)) AS data "
                "FROM (SELECT CONCAT(' / ', Class4) AS ClassName, DataTypeName,DataGrade, "
                "CASE IsSens WHEN '是' THEN '敏感' WHEN '否' THEN '非敏感' ELSE '非敏感' END AS IsSens "
-               "FROM tb_template_imports WHERE ImportStamp='6ac3bb98-7d17-11ee-a46d-0c42a163ddf4') AS S;"
+               "FROM tb_template_imports WHERE ImportStamp=%s) AS S;"
                )
     try:
         str_4_3 = []
-        cur.execute(sql_4_3)
+        cur.execute(sql_4_3,[import_stamp])
         res_4_3 = cur.fetchall()
         if res_4_3:
             str_4_3 = json.loads(res_4_3[0]['data'])
@@ -465,7 +460,7 @@ def get_rp_value():
     }
 
     # 更新报表字段
-    sql_up = ("INSERT INTO tb_report (task_id, task_name, template_id, template_name, status, data_json, "
+    sql_ins = ("INSERT INTO tb_report (task_id, task_name, template_id, template_name, status, data_json, "
               "task_create_id, task_create_name, create_time, update_time, report_number) VALUES (1, %s, "
               "1, %s, 1, %s, 1, %s, NOW(), NOW(), %s);"
               )
@@ -552,15 +547,12 @@ def get_rp_value():
     rp_value["5_3"] = str_5_3
 
     rp_json = json.dumps(rp_value, ensure_ascii=False)
-    cur_src.execute(sql_up, [rp_name, (rp_name + '分类分级'), rp_author, rp_json, rp_no])
+    cur.execute(sql_ins, [rp_name, (rp_name + '分类分级'), rp_json, rp_author, rp_no])
 
     con.commit()
-    con_src.commit()
     cur.close()
-    cur_src.close()
 
 
-get_rp_value()
+get_rp_value('6ac3bb98-7d17-11ee-a46d-0c42a163ddf4')
 
 con.close()
-con_src.close()
