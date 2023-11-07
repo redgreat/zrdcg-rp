@@ -18,11 +18,6 @@ my_database = config.get("dcg_task_test", "database")
 my_user = config.get("dcg_task_test", "user")
 my_password = config.get("dcg_task_test", "password")
 
-src_host = config.get("src_dcg_db", "host")
-src_database = config.get("src_dcg_db", "database")
-src_user = config.get("src_dcg_db", "user")
-src_password = config.get("src_dcg_db", "password")
-
 con = mysql.connector.connect(
     host=my_host, user=my_user, password=my_password, database=my_database
 )
