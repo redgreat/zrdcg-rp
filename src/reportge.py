@@ -11,7 +11,7 @@ import configparser
 
 # 数据库连接定义
 config = configparser.ConfigParser()
-config.read("db.cnf")
+config.read("../conf/db.cnf")
 
 my_host = config.get("dcg_task_test", "host")
 my_database = config.get("dcg_task_test", "database")
@@ -37,7 +37,7 @@ def get_rp_value(import_stamp: str):
 
     str_now = datetime.strftime(time_now, '%Y-%m-%d %H:%M:%S')  # 报告日期
 
-    rp_name = '壹好车服'  # 报告涉及系统
+    rp_name = '车务系统'  # 报告涉及系统
 
     rp_dura = 10  # 报告生成  总时长
     rp_start = datetime.strftime(time_now - timedelta(seconds=rp_dura), '%Y-%m-%d %H:%M:%S')  # 报告导出 开始时间
@@ -548,6 +548,6 @@ def get_rp_value(import_stamp: str):
     cur.close()
 
 
-get_rp_value('6ac3bb98-7d17-11ee-a46d-0c42a163ddf4')
+get_rp_value('db6d239b-88b0-4a4a-b5bf-dda8d008b624')
 
 con.close()
